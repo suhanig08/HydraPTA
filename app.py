@@ -30,6 +30,8 @@ from src.plotting import (
     create_sensitivity_comparison_plot
 )
 from data.demo_cases import DEMO_CASES, get_demo_case, list_demo_cases
+from src.ui_user_mode import render_user_input_page
+from src.validation_engine import run_demo_case_validation
 
 
 # --- Page Configuration ---
@@ -269,23 +271,22 @@ def render_landing_page():
             
     with col2:
         st.markdown("""
-        <div class="pta-card" style="background-color: #FAFAFA;">
-            <div class="pta-card-header" style="color:#718096;">
-                MODE 02 — <span class="badge-soon">COMING SOON</span>
-            </div>
-            <h3 style="margin-top:0.3rem; margin-bottom:0.6rem; color:#718096;">User Input</h3>
-            <p style="color:#718096; font-size:0.95rem; line-height:1.5;">
-                Analyze your own pressure-transient data, custom reservoir configurations, 
-                and upload well-test gauge CSV measurements for automated diagnostic processing.
+        <div class="pta-card">
+            <div class="pta-card-header">MODE 02 — FULLY FUNCTIONAL</div>
+            <h3 style="margin-top:0.3rem; margin-bottom:0.6rem;">User Input PTA</h3>
+            <p style="color:#4A5568; font-size:0.95rem; line-height:1.5;">
+                Analyze your own field pressure-transient gauge data (Drawdown & Buildup), 
+                upload Excel/CSV measurements, run automated Bourdet derivative diagnostics, and estimate properties.
             </p>
-            <ul style="color:#A0AEC0; font-size:0.9rem; padding-left:1.2rem;">
-                <li>Custom petrophysical & fracture property input</li>
-                <li>Well test pressure gauge CSV upload & filtering</li>
-                <li>Automated type-curve matching & inverse characterization</li>
+            <ul style="color:#4A5568; font-size:0.9rem; padding-left:1.2rem;">
+                <li>Drawdown Analysis (Bourdet derivative, flow regimes, k, skin, xf, Cf)</li>
+                <li>Buildup Analysis (Horner semilog, Agarwal equivalent time, P*, skin)</li>
+                <li>Downloadable processed data CSV & executive PDF engineering reports</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
-        st.button("User Input (Coming Soon)", disabled=True, use_container_width=True)
+        if st.button("Launch User Input PTA →", type="primary", use_container_width=True):
+            navigate_to("user_input")
         
     st.markdown("---")
     st.caption("HydraPTA is an educational analytical tool designed for petroleum engineering analysis and technical interviews.")
@@ -590,6 +591,16 @@ def render_results_page():
     df_val = pd.DataFrame(val_rows)
     st.dataframe(df_val, hide_index=True, use_container_width=True)
     
+    # Section 12 Benchmark: Compare with new automated Mode 2 workflow
+    with st.expander("🔬 Mode 2 Automated PTA Engine Benchmark Table (Section 12 Validation)"):
+        st.markdown(
+            "Validate the new automated Bourdet diagnostic workflow on this synthetic case. "
+            "Evaluates semilog permeability, Bourdet derivative plateau, and fracture properties without prior knowledge:"
+        )
+        add_bench_noise = st.checkbox("Add 0.25 psi measurement noise to test robustness", value=False, key=f"bench_noise_{case_id}")
+        df_bench, _ = run_demo_case_validation(case_id, add_noise=add_bench_noise)
+        st.dataframe(df_bench, hide_index=True, use_container_width=True)
+    
     st.markdown("---")
     
     # -------------------------------------------------------------------------
@@ -715,8 +726,110 @@ def render_results_page():
         )
 
 
+# ==============================================================================
+# PAGE 5: METHODOLOGY & THEORY
+# ==============================================================================
+def render_methodology_page():
+    col_back, col_title = st.columns([1, 6])
+    with col_back:
+        if st.button("← Home"):
+            navigate_to("home")
+    with col_title:
+        st.subheader("📚 PTA Methodology, Analytical Formulations & Theory")
+        
+    st.markdown("""
+    HydraPTA uses rigorous petroleum engineering pressure transient analysis equations,
+    numerical differentiation, and slope diagnostics. All formulas adhere strictly to standard field unit conventions.
+    """)
+    
+    st.markdown("---")
+    
+    # 1. Bourdet Derivative
+    st.markdown("#### 1. Bourdet Logarithmic Pressure Derivative")
+    st.markdown("""
+    The logarithmic pressure derivative isolates the instantaneous rate of pressure change with log-time:
+    $$\\Delta P' = \\frac{d(\\Delta P)}{d(\\ln t)} = t \\frac{d(\\Delta P)}{dt}$$
+    
+    HydraPTA calculates the derivative using the 3-point central logarithmic difference algorithm with search window parameter $L$:
+    $$\\Delta P'_i = \\frac{\\left(\\frac{\\Delta P_i - \\Delta P_L}{\\ln t_i - \\ln t_L}\\right) (\\ln t_R - \\ln t_i) + \\left(\\frac{\\Delta P_R - \\Delta P_i}{\\ln t_R - \\ln t_i}\\right) (\\ln t_i - \\ln t_L)}{\\ln t_R - \\ln t_L}$$
+    where $L$ and $R$ are the left and right sample points satisfying $\\ln(t_i/t_L) \\ge L$ and $\\ln(t_R/t_i) \\ge L$.
+    """)
+    
+    st.markdown("---")
+    
+    # 2. Flow Regimes
+    st.markdown("#### 2. Flow Regime Diagnostic Slopes")
+    st.markdown("""
+    On a log-log diagnostic plot of $\\Delta P'$ vs $t$, the local derivative slope $m_{\\text{log}} = \\frac{d(\\ln \\Delta P')}{d(\\ln t)}$ reveals the prevailing flow geometry:
+    
+    | Flow Regime | Theoretical Slope | Physical Mechanism |
+    |---|---|---|
+    | **Wellbore Storage** | $+1.0$ | Fluid decompression/accumulation inside the wellbore ($C \\ne 0$). |
+    | **Bilinear Flow** | $+0.25$ | Simultaneous flow inside finite-conductivity fracture and from formation. |
+    | **Formation Linear Flow** | $+0.50$ | Linear fluid motion in formation perpendicular to fracture faces. |
+    | **Pseudoradial Flow** | $0.0$ | Disturbance expands far beyond fracture tips; horizontal derivative plateau. |
+    """)
+    
+    st.markdown("---")
+    
+    # 3. Property Estimation Formulations
+    st.markdown("#### 3. Conventional Property Estimation Formulations (Field Units)")
+    st.markdown("""
+    ##### A. Permeability from Pseudoradial Flow (Semilog Method)
+    $$\\Delta P = \\frac{162.6 q \\mu B_o}{kh} \\left[ \\log_{10}(t) + \\log_{10}\\left(\\frac{k}{\\phi \\mu c_t r_w^2}\\right) - 3.23 + 0.87 S \\right]$$
+    $$k = \\frac{162.6 q \\mu B_o}{m h}$$
+    where $m$ is the semilog slope in psi/cycle.
+    
+    ##### B. Permeability from Bourdet Derivative Plateau
+    $$\\Delta P'_{\\text{plateau}} = \\frac{70.6 q \\mu B_o}{kh} \\implies k = \\frac{70.6 q \\mu B_o}{h \\Delta P'_{\\text{plateau}}}$$
+    
+    ##### C. Wellbore Skin Factor (S)
+    $$S = 1.151 \\left[ \\frac{\\Delta P_{1\\text{hr}}}{m} - \\log_{10}\\left(\\frac{k}{\\phi \\mu c_t r_w^2}\\right) + 3.23 \\right]$$
+    evaluated from the semilog regression intercept $\\Delta P_{1\\text{hr}}$ at $t = 1\\text{ hr}$.
+    
+    ##### D. Fracture Half-Length ($x_f$) from Linear Flow
+    $$\\Delta P = \\frac{4.064 q B_o}{h x_f} \\sqrt{\\frac{\\mu t}{k \\phi c_t}} \\implies x_f = \\frac{4.064 q B_o}{m_{\\text{LF}} h} \\sqrt{\\frac{\\mu}{k \\phi c_t}}$$
+    where $m_{\\text{LF}}$ is the slope of $\\Delta P$ vs $\\sqrt{t}$.
+    
+    ##### E. Fracture Conductivity ($C_f = k_f w_f$) from Bilinear Flow
+    $$\\Delta P = \\frac{44.1 q \\mu B_o t^{1/4}}{h (k_f w_f)^{1/2} (\\phi \\mu c_t k)^{1/4}} \\implies C_f = k_f w_f = \\left[ \\frac{44.1 q \\mu B_o}{m_{\\text{BL}} h (\\phi \\mu c_t k)^{1/4}} \\right]^2$$
+    where $m_{\\text{BL}}$ is the slope of $\\Delta P$ vs $t^{1/4}$.
+    
+    ##### F. Pressure Buildup Horner Analysis
+    $$P_{ws} = P^* - 162.6 \\frac{q \\mu B_o}{kh} \\log_{10}\\left( \\frac{t_p + \\Delta t}{\\Delta t} \\right)$$
+    $$k = \\frac{162.6 q \\mu B_o}{m_{\\text{Horner}} h}, \\quad S = 1.151 \\left[ \\frac{P_{1\\text{hr}} - P_{wf}(\\Delta t=0)}{m_{\\text{Horner}}} - \\log_{10}\\left(\\frac{k}{\\phi \\mu c_t r_w^2}\\right) + 3.23 \\right]$$
+    """)
+
+
 # --- Application Main Router ---
 def main():
+    # Sidebar Global Navigation
+    with st.sidebar:
+        st.markdown("### ⚡ **HydraPTA**")
+        st.caption("Automated Pressure Transient Analysis")
+        st.markdown("---")
+        
+        if st.button("🏠 Home / Overview", use_container_width=True):
+            navigate_to("home")
+        if st.button("⚡ Mode 01: Demo Cases", use_container_width=True):
+            navigate_to("case_selection")
+        if st.button("📉 Mode 02: User Input PTA", use_container_width=True, type="primary" if st.session_state["current_page"] == "user_input" else "secondary"):
+            navigate_to("user_input")
+        if st.button("📚 Methodology & Theory", use_container_width=True):
+            navigate_to("methodology")
+            
+        st.markdown("---")
+        st.markdown("""
+        **Capabilities:**
+        - Drawdown & Buildup PTA
+        - Bourdet Differentiation
+        - Automated Regime Detection
+        - Pseudoradial Plateau Search
+        - Fracture Characterization
+        - PDF Engineering Reports
+        """)
+        st.caption("HydraPTA v2.0")
+
     page = st.session_state["current_page"]
     if page == "home":
         render_landing_page()
@@ -726,6 +839,10 @@ def main():
         render_case_review_page()
     elif page == "results":
         render_results_page()
+    elif page == "user_input":
+        render_user_input_page()
+    elif page == "methodology":
+        render_methodology_page()
     else:
         render_landing_page()
 

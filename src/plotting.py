@@ -391,3 +391,431 @@ def create_sensitivity_comparison_plot(
     )
 
     return fig
+
+
+
+def create_semilog_analysis_plot(
+    times: np.ndarray,
+    delta_p: np.ndarray,
+    t_start: float,
+    t_end: float,
+    slope_m: Optional[float] = None,
+    intercept_b: Optional[float] = None,
+    r_squared: Optional[float] = None,
+    case_name: str = "Well Test Analysis"
+) -> go.Figure:
+    """
+    Generate semilog pressure plot (Delta P vs log10(t)) with highlighted regression interval,
+    fitted radial flow straight line, and regression diagnostics.
+    """
+    fig = go.Figure()
+    
+    times = np.asarray(times)
+    delta_p = np.asarray(delta_p)
+    valid = times > 0
+    t_plot = times[valid]
+    dp_plot = delta_p[valid]
+
+    # 1. All raw data points
+    fig.add_trace(go.Scatter(
+        x=t_plot,
+        y=dp_plot,
+        mode="markers",
+        name="All Measurements",
+        marker=dict(size=4, color="#CBD5E0", symbol="circle"),
+        hovertemplate="<b>Time</b>: %{x:.4g} hr<br><b>ΔP</b>: %{y:.2f} psi<extra></extra>"
+    ))
+
+    # 2. Selected interval points
+    mask_reg = (t_plot >= t_start) & (t_plot <= t_end)
+    if np.sum(mask_reg) > 0:
+        fig.add_trace(go.Scatter(
+            x=t_plot[mask_reg],
+            y=dp_plot[mask_reg],
+            mode="markers",
+            name="Selected Interval",
+            marker=dict(size=6, color=COLOR_PRIMARY_ORANGE, symbol="circle"),
+            hovertemplate="<b>Selected Time</b>: %{x:.4g} hr<br><b>ΔP</b>: %{y:.2f} psi<extra></extra>"
+        ))
+
+    # 3. Straight line fit
+    if slope_m is not None and intercept_b is not None:
+        t_line = np.geomspace(max(t_start * 0.5, np.min(t_plot)), min(t_end * 2.0, np.max(t_plot)), 50)
+        dp_line = slope_m * np.log10(t_line) + intercept_b
+        
+        stat_label = f"m = {slope_m:.2f} psi/cycle"
+        if r_squared is not None:
+            stat_label += f", R² = {r_squared:.4f}"
+            
+        fig.add_trace(go.Scatter(
+            x=t_line,
+            y=dp_line,
+            mode="lines",
+            name=f"Radial Semilog Fit ({stat_label})",
+            line=dict(color=COLOR_SECONDARY_BLUE, width=2.5, dash="solid"),
+            hovertemplate="<b>Fitted Line</b><br>Time: %{x:.4g} hr<br>ΔP: %{y:.2f} psi<extra></extra>"
+        ))
+
+    fig.update_xaxes(
+        type="log",
+        title_text="<b>Test Time, t (hours) — Logarithmic Scale</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+    
+    fig.update_yaxes(
+        title_text="<b>Pressure Drawdown, ΔP (psi) — Linear Scale</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+
+    fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        title=dict(
+            text=f"<b>Semilog Radial-Flow Analysis Plot — {case_name}</b>",
+            font=dict(size=15, color=COLOR_DARK_CHARCOAL)
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor=COLOR_BORDER_GRAY,
+            borderwidth=1
+        ),
+        margin=dict(l=60, r=40, t=60, b=50),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF"
+    )
+
+    return fig
+
+
+def create_dimensionless_diagnostic_plot(
+    df_dim: pd.DataFrame,
+    case_name: str = "Well Test Analysis",
+    include_theoretical: bool = True
+) -> go.Figure:
+    """
+    Generate Dimensionless Pressure pD and Dimensionless Derivative p'D log-log diagnostic plot.
+    Overlays the theoretical radial infinite-acting line source type curve (p'D = 0.5 plateau).
+    """
+    fig = go.Figure()
+    
+    tD = df_dim["tD"].values
+    pD = df_dim["pD"].values
+    pD_prime = df_dim["pD_prime"].values
+
+    # 1. Dimensionless Pressure pD
+    fig.add_trace(go.Scatter(
+        x=tD,
+        y=pD,
+        mode="lines+markers",
+        name="Dimensionless Pressure (pD)",
+        line=dict(color=COLOR_SECONDARY_BLUE, width=2.2),
+        marker=dict(size=4, color=COLOR_SECONDARY_BLUE),
+        hovertemplate="<b>tD</b>: %{x:.3e}<br><b>pD</b>: %{y:.3f}<extra></extra>"
+    ))
+
+    # 2. Dimensionless Derivative p'D
+    fig.add_trace(go.Scatter(
+        x=tD,
+        y=pD_prime,
+        mode="lines+markers",
+        name="Dimensionless Derivative (p'D)",
+        line=dict(color=COLOR_PRIMARY_ORANGE, width=2.2),
+        marker=dict(size=4, color=COLOR_PRIMARY_ORANGE),
+        hovertemplate="<b>tD</b>: %{x:.3e}<br><b>p'D</b>: %{y:.3f}<extra></extra>"
+    ))
+
+    # 3. Theoretical Radial Flow Horizontal Derivative p'D = 0.5
+    if include_theoretical and len(tD) > 0:
+        tD_min = np.min(tD[tD > 0])
+        tD_max = np.max(tD)
+        
+        fig.add_trace(go.Scatter(
+            x=[tD_min, tD_max],
+            y=[0.5, 0.5],
+            mode="lines",
+            name="Theoretical Radial Plateau (p'D = 0.5)",
+            line=dict(color="#4A5568", width=1.8, dash="dash"),
+            hoverinfo="skip"
+        ))
+
+    fig.update_xaxes(
+        type="log",
+        title_text="<b>Dimensionless Time, tD</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+    
+    fig.update_yaxes(
+        type="log",
+        title_text="<b>Dimensionless Variables, pD & p'D</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+
+    fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        title=dict(
+            text=f"<b>Dimensionless Diagnostic Plot — {case_name}</b>",
+            font=dict(size=15, color=COLOR_DARK_CHARCOAL)
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor=COLOR_BORDER_GRAY,
+            borderwidth=1
+        ),
+        margin=dict(l=60, r=40, t=60, b=50),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF"
+    )
+
+    return fig
+
+
+def create_smoothing_comparison_plot(
+    times: np.ndarray,
+    derivatives_by_L: Dict[float, np.ndarray],
+    case_name: str = "Derivative Smoothing Sensitivity"
+) -> go.Figure:
+    """
+    Generate comparison plot showing Bourdet pressure derivatives at multiple L distances.
+    """
+    fig = go.Figure()
+    palette = [COLOR_PRIMARY_ORANGE, COLOR_SECONDARY_BLUE, "#2D3748", "#38A169"]
+
+    for idx, (L_val, derv) in enumerate(derivatives_by_L.items()):
+        col = palette[idx % len(palette)]
+        fig.add_trace(go.Scatter(
+            x=times,
+            y=derv,
+            mode="lines",
+            name=f"L = {L_val:.2f}",
+            line=dict(color=col, width=2.0),
+            hovertemplate=f"<b>L = {L_val:.2f}</b><br>Time: %{{x:.4g}} hr<br>ΔP': %{{y:.2f}} psi<extra></extra>"
+        ))
+
+    fig.update_xaxes(
+        type="log",
+        title_text="<b>Test Time, t (hours)</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+    
+    fig.update_yaxes(
+        type="log",
+        title_text="<b>Bourdet Pressure Derivative, ΔP' (psi)</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+
+    fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        title=dict(
+            text=f"<b>Bourdet Smoothing Sensitivity (Different L Values) — {case_name}</b>",
+            font=dict(size=15, color=COLOR_DARK_CHARCOAL)
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor=COLOR_BORDER_GRAY,
+            borderwidth=1
+        ),
+        margin=dict(l=60, r=40, t=60, b=50),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF"
+    )
+
+    return fig
+
+
+def create_horner_plot(
+    df_buildup: pd.DataFrame,
+    slope_m_horner: Optional[float] = None,
+    intercept_b: Optional[float] = None,
+    P_star: Optional[float] = None,
+    P_1hr: Optional[float] = None,
+    tp_hr: float = 100.0,
+    case_name: str = "Buildup Test Analysis"
+) -> go.Figure:
+    """
+    Generate classic petroleum engineering Horner semilog plot:
+    Pws vs log10((tp + dt) / dt) with inverted X-axis (decreasing from right to left).
+    """
+    fig = go.Figure()
+
+    hr = df_buildup["horner_ratio"].values
+    pws = df_buildup["pws_psi"].values
+
+    # 1. Measured buildup pressures
+    fig.add_trace(go.Scatter(
+        x=hr,
+        y=pws,
+        mode="markers",
+        name="Shut-In Pressure Pws",
+        marker=dict(size=5, color=COLOR_SECONDARY_BLUE),
+        hovertemplate="<b>Horner Ratio</b>: %{x:.2f}<br><b>Pws</b>: %{y:.2f} psi<extra></extra>"
+    ))
+
+    # 2. Fitted Horner straight line extrapolated to HR = 1 (P*)
+    if slope_m_horner is not None and intercept_b is not None:
+        hr_line = np.geomspace(1.0, np.max(hr) * 1.2, 50)
+        pws_line = intercept_b - slope_m_horner * np.log10(hr_line)
+        
+        label_str = f"Horner Straight Line (m = {slope_m_horner:.2f} psi/cycle)"
+        if P_star is not None:
+            label_str += f", P* = {P_star:.1f} psi"
+            
+        fig.add_trace(go.Scatter(
+            x=hr_line,
+            y=pws_line,
+            mode="lines",
+            name=label_str,
+            line=dict(color=COLOR_PRIMARY_ORANGE, width=2.5),
+            hovertemplate="<b>Horner Line</b><br>Horner Ratio: %{x:.2f}<br>Pws: %{y:.2f} psi<extra></extra>"
+        ))
+        
+        # Mark P* at HR = 1
+        if P_star is not None:
+            fig.add_trace(go.Scatter(
+                x=[1.0],
+                y=[P_star],
+                mode="markers+text",
+                name=f"Extrapolated P* = {P_star:.1f} psi",
+                marker=dict(size=9, color="#E53E3E", symbol="diamond"),
+                text=[f"P* = {P_star:.1f} psi"],
+                textposition="top right"
+            ))
+
+    # Invert X-axis as standard in petroleum engineering Horner plots
+    fig.update_xaxes(
+        type="log",
+        autorange="reversed",
+        title_text="<b>Horner Time Ratio, (tp + Δt) / Δt — Inverted Scale</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+    
+    fig.update_yaxes(
+        title_text="<b>Shut-In Bottomhole Pressure, Pws (psi)</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+
+    fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        title=dict(
+            text=f"<b>Horner Semilog Plot — {case_name}</b>",
+            font=dict(size=15, color=COLOR_DARK_CHARCOAL)
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor=COLOR_BORDER_GRAY,
+            borderwidth=1
+        ),
+        margin=dict(l=60, r=40, t=60, b=50),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF"
+    )
+
+    return fig
+
+
+def create_buildup_diagnostic_plot(
+    df_buildup: pd.DataFrame,
+    case_name: str = "Buildup Test Analysis"
+) -> go.Figure:
+    """
+    Generate log-log diagnostic plot for pressure buildup using Agarwal equivalent time:
+    Delta Pws and Agarwal Bourdet derivative Delta P'ws vs Agarwal equivalent time te.
+    """
+    fig = go.Figure()
+    
+    te = df_buildup["agarwal_te_hr"].values
+    dp = df_buildup["delta_pws_psi"].values
+    derv = df_buildup["derivative_psi"].values
+
+    fig.add_trace(go.Scatter(
+        x=te,
+        y=dp,
+        mode="lines+markers",
+        name="Pressure Increase ΔPws (psi)",
+        line=dict(color=COLOR_SECONDARY_BLUE, width=2.5),
+        marker=dict(size=4, color=COLOR_SECONDARY_BLUE),
+        hovertemplate="<b>te</b>: %{x:.4g} hr<br><b>ΔPws</b>: %{y:.2f} psi<extra></extra>"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=te,
+        y=derv,
+        mode="lines+markers",
+        name="Agarwal Bourdet Derivative ΔP' (psi)",
+        line=dict(color=COLOR_PRIMARY_ORANGE, width=2.5),
+        marker=dict(size=5, color=COLOR_PRIMARY_ORANGE),
+        hovertemplate="<b>te</b>: %{x:.4g} hr<br><b>ΔP'</b>: %{y:.2f} psi<extra></extra>"
+    ))
+
+    fig.update_xaxes(
+        type="log",
+        title_text="<b>Agarwal Equivalent Shut-In Time, te (hours)</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+    
+    fig.update_yaxes(
+        type="log",
+        title_text="<b>ΔPws & Bourdet Derivative ΔP' (psi)</b>",
+        gridcolor=COLOR_GRID,
+        linecolor=COLOR_DARK_CHARCOAL,
+        showline=True
+    )
+
+    fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        title=dict(
+            text=f"<b>Buildup Diagnostic Plot (Agarwal Equivalent Time) — {case_name}</b>",
+            font=dict(size=15, color=COLOR_DARK_CHARCOAL)
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1.0,
+            bgcolor="rgba(255, 255, 255, 0.8)",
+            bordercolor=COLOR_BORDER_GRAY,
+            borderwidth=1
+        ),
+        margin=dict(l=60, r=40, t=60, b=50),
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF"
+    )
+
+    return fig

@@ -90,6 +90,40 @@ HydraPTA performs inverse parameter estimation without hardcoding or reading tru
 
 ---
 
+## Application Modes
+
+HydraPTA offers two distinct operational modes:
+
+### Mode 01 — Predefined Demo Cases
+Explore forward-modeled synthetic scenarios representing high-conductivity, finite-conductivity, and deeply penetrating hydraulic fractures.
+- Analytical Laplace-domain solutions inverted via Gaver-Stehfest numerical algorithm ($N = 10$).
+- Forward simulation validated against known ground-truth parameters.
+- Parameter sensitivity analysis exploring dynamic responses to varying reservoir and fracture properties.
+
+### Mode 02 — User Input PTA (Drawdown & Buildup)
+Practical petroleum engineering tool accepting actual well-test pressure-time data from users (Excel `.xlsx` and `.csv`).
+- **Drawdown Analysis**:
+  - Automatic column recognition with manual fallback (Time, $P_{wf}$, $q$, $B_o$, $\mu$).
+  - Data validation: positive time/pressure, monotonicity, duplicates, missing values.
+  - 3-point Bourdet pressure derivative with adjustable smoothing parameter $L$.
+  - Automated flow regime identification (Wellbore storage, Bilinear flow, Linear flow, Pseudoradial flow).
+  - Dedicated stabilization recognition for horizontal derivative plateau ($\Delta P' \approx \text{const}$).
+  - Conventional PTA property estimation:
+    - Permeability from semilog straight line: $k = \frac{162.6 q \mu B_o}{m h}$
+    - Permeability from Bourdet derivative plateau: $k = \frac{70.6 q \mu B_o}{h \Delta P'_{\text{plateau}}}$
+    - Skin factor from semilog intercept: $S = 1.151 \left[ \frac{\Delta P_{1\text{hr}}}{m} - \log_{10}\left(\frac{k}{\phi \mu c_t r_w^2}\right) + 3.23 \right]$
+    - Fracture half-length from linear flow: $x_f = \frac{4.064 q B_o}{m_{\text{LF}} h} \sqrt{\frac{\mu}{k \phi c_t}}$
+    - Fracture conductivity from bilinear flow: $C_f = k_f w_f = \left[ \frac{44.1 q \mu B_o}{m_{\text{BL}} h (\phi \mu c_t k)^{1/4}} \right]^2$
+  - Log-log diagnostic plot ($\Delta P$ and $\Delta P'$), Dimensionless plot ($p_D$ & $p'_D$), and Semilog radial plot with interactive regression interval adjustment.
+  - Downloadable processed data CSV and executive PDF engineering reports.
+- **Buildup Analysis**:
+  - Shut-in elapsed time ($\Delta t$) and shut-in pressure ($P_{ws}$).
+  - Horner time ratio $\frac{t_p + \Delta t}{\Delta t}$ and Agarwal equivalent time $\Delta t_e = \frac{t_p \cdot \Delta t}{t_p + \Delta t}$.
+  - Classic inverted Horner semilog plot, extrapolated pressure $P^*$, and $P_{1\text{hr}}$.
+  - Permeability and skin estimation from Horner straight line.
+
+---
+
 ## Predefined Educational Demo Cases
 
 1. **CASE 01 — High-Conductivity Fracture**:
@@ -148,9 +182,14 @@ pytest tests/ -v
 
 ---
 
-## Future Work
+## Platform Capabilities
 
-- [ ] Custom CSV field data upload with pressure gauge noise filtering.
-- [ ] Multi-rate superposition (Horner analysis, Agarwal equivalent time).
+- [x] Custom CSV & Excel field data upload with gauge noise filtering.
+- [x] Automated column detection and manual column mapping fallback.
+- [x] Pressure drawdown and Bourdet derivative with adjustable $L$ smoothing.
+- [x] Automated flow regime identification and stabilization plateau detection.
+- [x] Conventional PTA property estimation ($k$, skin $S$, $x_f$, $C_f$).
+- [x] Multi-rate superposition & pressure buildup (Horner analysis, Agarwal equivalent time).
+- [x] Interactive Plotly diagnostic plots and executive PDF engineering reports.
 - [ ] Dual-porosity / naturally fractured reservoir extensions (Warren-Root).
 - [ ] Multi-stage fractured horizontal well (MFHW) trilinear transient model.
