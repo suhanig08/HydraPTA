@@ -8,7 +8,7 @@
 
 ## Overview
 
-**HydraPTA** is a specialized petroleum engineering analytical application designed to simulate, diagnose, and characterize the transient pressure behavior of hydraulically fractured vertical wells. Built for technical interviews, placement demonstrations (SLB, BP, ExxonMobil, Chevron, Cairn), and reservoir engineering education, HydraPTA bridges the gap between theoretical diffusivity physics and practical well-test interpretation.
+**HydraPTA** is a specialized petroleum engineering analytical application designed to simulate, diagnose, and characterize the transient pressure behavior of hydraulically fractured vertical wells. 
 
 The application follows a complete, end-to-end petroleum engineering PTA workflow:
 
